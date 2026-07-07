@@ -3,16 +3,22 @@ import java.util.concurrent.BlockingQueue;
 // Clase que consume pedidos desde la cola y los procesa
 public class ConsumidorPedidos implements Runnable {
 
-    // Cola compartida desde donde se tomarán los pedidos
+    // Cola compartida del sistema
     private BlockingQueue<Pedido> colaPedidos;
 
-    // Servicio encargado de validar y descontar stock
+    // Servicio de stock
     private ServicioStock servicioStock;
 
-    // Constructor que recibe la cola y el servicio de stock
-    public ConsumidorPedidos(BlockingQueue<Pedido> colaPedidos, ServicioStock servicioStock) {
+    // Métricas del sistema
+    private MetricasSistema metricas;
+
+    // Constructor
+    public ConsumidorPedidos(BlockingQueue<Pedido> colaPedidos,
+                             ServicioStock servicioStock,
+                             MetricasSistema metricas) {
         this.colaPedidos = colaPedidos;
         this.servicioStock = servicioStock;
+        this.metricas = metricas;
     }
 
     @Override
@@ -20,31 +26,27 @@ public class ConsumidorPedidos implements Runnable {
         try {
             boolean continuar = true;
 
-            // El consumidor trabaja mientras continuar sea verdadero
+            // El consumidor sigue activo mientras haya pedidos
             while (continuar) {
 
-                // take() espera hasta que exista un pedido en la cola
+                // Espera hasta que exista un pedido disponible
                 Pedido pedido = colaPedidos.take();
 
-                // Pedido especial para finalizar el consumidor
+                // Pedido especial para finalizar
                 if (pedido.getId() == 0) {
                     continuar = false;
                     System.out.println("No hay más pedidos por procesar");
                 } else {
-
-                    // Procesa solamente los pedidos normales
                     procesarPedido(pedido);
                 }
             }
 
         } catch (InterruptedException e) {
-
-            // Detiene correctamente el hilo si ocurre una interrupción
             Thread.currentThread().interrupt();
         }
     }
 
-    // Método que representa la lógica de procesamiento de un pedido
+    // Procesa un pedido normal
     private void procesarPedido(Pedido pedido) {
 
         System.out.println("Procesando pedido "
@@ -54,18 +56,23 @@ public class ConsumidorPedidos implements Runnable {
                 + ": "
                 + pedido.getProducto());
 
-        // Se intenta descontar stock del producto solicitado
+        // Incrementa el total de pedidos procesados
+        metricas.incrementarPedidosTotales();
+
+        // Intenta descontar stock
         boolean stockDisponible = servicioStock.descontarStock(pedido.getProducto());
 
-        // Si hay stock, el pedido se confirma
+        // Si hay stock, confirma el pedido
         if (stockDisponible) {
+            metricas.incrementarPedidosConfirmados();
+
             System.out.println("Pedido confirmado para "
                     + pedido.getCliente()
                     + ": "
                     + pedido.getProducto());
         } else {
+            metricas.incrementarPedidosRechazados();
 
-            // Si no hay stock, el pedido se rechaza
             System.out.println("Pedido rechazado para "
                     + pedido.getCliente()
                     + ": "
